@@ -1,0 +1,123 @@
+---
+title: "NBA Data Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, fig.height = 3)
+library(tidyverse)
+library(lubridate)
+library(scales)
+source("scripts/viridis.R")
+```
+This is a report by Arnav Karnik
+
+# Introduction
+I have always wondered what determines an NBA player's salary. In this report I will be creating a player rating deterministic on their statistics. 
+In my rating, the most important factors will be Turnovers. I believe that the best players do not make mistakes often. Meaning that the number of turnovers an NBA player has should be penalized in his rating. Also, I a player's field goal percentage is also very important because a really good basketball player is very efficient when it comes to the number of field goals they make and the number of field goals they attempt. So I multiply the player's field goal percentage by whatever quantity to get the end rating value. 
+
+```{r}
+nba = read_csv("data/NBA_Players.csv") %>%
+  select(-URL) %>%
+  filter(SALARY != "Not signed") %>%
+  mutate(COLLEGE = case_when(
+    COLLEGE == "-" ~ "None",
+    TRUE ~ COLLEGE
+  ))
+nba$SALARY <- as.numeric(gsub('\\$|,', '', nba$SALARY))/1000000
+names(nba)[names(nba) == 'SALARY'] <- 'SALARY (millions)'
+nba = nba %>%
+  mutate(rating = (2*PPG + 3*APG + BLKPG + 3*STLPG - 6*TOPG)*FGP) %>%
+  arrange(desc(rating)) %>%
+  filter(rating!=0 & `SALARY (millions)`>2) %>%
+  select(TEAM, NAME, rating, `SALARY (millions)`, everything())
+nba
+```
+## Rating Analysis
+As you can see the rating of each player seems to be very accurate with the top ten players displayed above being house hold names in the NBA for their respective teams. However, lets see if there is a correlation between a player's rating and their salary in the NBA. 
+
+
+
+
+# Linear Regression Model between Rating & Salary
+```{r}
+ggplot(nba, aes(x=rating, y=`SALARY (millions)`)) + 
+  geom_point() + 
+  geom_smooth(se=FALSE, method="lm", color='magenta') + 
+  geom_smooth(se=FALSE)
+```
+```{r}
+corr_coef = cor(nba$rating, nba$`SALARY (millions)`)
+corr_coef
+```
+## Linear Regression Analysis
+The correlation coefficient of 0.6657355 between the rating of each NBA player and their salary indicates that there exists a significant and positive relationship. This suggests that as the rating of an NBA player increases, so does their salary. 
+
+Based on the linear regression model, you can consider the scatter points located on the line to represent the average player with respect to rating and salary. So a player with a certain rating should be paid a certain salary.
+
+A NBA Player's value can also be determined through the graph above. The magenta colored line represents the linear regression model between a player's rating and salary. The shaded region located above the linear regression line represents the NBA player's who are considered to be overrated. Meaning that 
+
+
+
+
+# Relationship of where NBA players went to college and their salary
+This analysis could reveal some valuable information for high school athletes aspiring to make good money in the NBA. By going to a college that produces more NBA players, a high schooler can expect that this university basketball program is very prestigious. 
+```{r}
+college_sal = nba %>%
+  filter(COLLEGE != "None") %>%
+  group_by(COLLEGE) %>%
+  summarize(mean_sal = mean(`SALARY (millions)`), std_sal = sd(`SALARY (millions)`), min_sal = min(`SALARY (millions)`), max_sal = max(`SALARY (millions)`), num_players = n(), total_sal = sum(`SALARY (millions)`)) %>%
+  mutate(case_when(
+    std_sal == NA ~ 0,
+    TRUE ~ std_sal
+  )) %>%
+  filter(num_players >= 5) %>%
+  arrange(desc(mean_sal), desc(total_sal))
+college_sal
+```
+
+```{r}
+ggplot(college_sal, aes(x=COLLEGE, y=mean_sal, fill=COLLEGE)) + 
+  geom_col() + 
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) + 
+  theme(legend.position = "none") +
+  xlab("College") + 
+  ylab("Mean Salary") + 
+  ggtitle("Distribition of Colleges vs Player's Mean Salary")
+
+ggplot(college_sal, aes(x=COLLEGE, y=num_players, fill=COLLEGE)) + 
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) + 
+  theme(legend.position = "none") +
+  xlab("College") + 
+  ylab("Number of Players") + 
+  ggtitle("Number of Players from Each College in the NBA")
+
+ggplot(college_sal, aes(x=COLLEGE, y=total_sal, fill=COLLEGE)) + 
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) + 
+  theme(legend.position = "none") +
+  xlab("College") + 
+  ylab("Total Salary") + 
+  ggtitle("Distribition of Colleges vs Player's Total Salary")
+```
+## College vs Salary Analysis
+So these three plots demonstrate which colleges produce the best NBA talent in terms of a player's salary. In the above analysis we found out that there does exist a direct relationship between a player's rating and their salary. And a player's rating is indicative of their talent level through a compilation of their statistics. 
+
+In the second plot we can see that the most players in this dataset, at least, come from Kentucky, Duke, and UCLA in that order. So these three Universities produce the most talent. However, the colleges that have the highest mean salary are Wake Forest and UCLA so we can say that on average UCLA seems to produce the best NBA players when it comes to their salary. This is because UCLA produces a lot of NBA players and their mean Salary is the greatest amongst the other colleges. 
+
+
+
+
+## Is there a difference between going to college and not going
+```{r}
+no_college = nba %>%
+  filter(COLLEGE == "None" & EXPERIENCE > 5) %>%
+  summarize(avg_rating = mean(rating), std_rating = sd(rating))
+college = nba %>%
+  filter(COLLEGE != "None" & EXPERIENCE > 5) %>%
+  summarize(avg_rating = mean(rating), std_rating = sd(rating))
+college
+no_college
+```
+Given the data in this data set, there does not seem to be a noticeable decision between going to college and not going in terms of the NBA player's ratings. This demonstrates that an NBA player's rating is not deterministic of whether they went to college or not but is only determined by the statistics of the player in their career as a basektball player. 
